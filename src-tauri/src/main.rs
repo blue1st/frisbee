@@ -12,8 +12,205 @@ use tauri::{
     Emitter, LogicalSize, Manager, Size, WindowEvent,
 };
 
+use serde::{Deserialize, Serialize};
+
 struct AppState {
     is_animating: Arc<AtomicBool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SearchResultNative {
+    pub title: String,
+    pub url: String,
+    pub snippet: String,
+    pub engine: String,
+}
+
+fn strip_html_tags(input: &str) -> String {
+    let mut result = String::new();
+    let mut inside_tag = false;
+    for c in input.chars() {
+        if c == '<' {
+            inside_tag = true;
+        } else if c == '>' {
+            inside_tag = false;
+        } else if !inside_tag {
+            result.push(c);
+        }
+    }
+    result
+        .replace("&amp;", "&")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .trim()
+        .to_string()
+}
+
+fn parse_ddg_html(html: &str) -> Vec<SearchResultNative> {
+    let mut list = Vec::new();
+    let parts: Vec<&str> = html.split("<a class=\"result__a\"").collect();
+    for part in parts.iter().skip(1).take(5) {
+        if let Some(href_start) = part.find("href=\"") {
+            let rest = &part[href_start + 6..];
+            if let Some(href_end) = rest.find('"') {
+                let raw_url = &rest[..href_end];
+                let mut clean_url = raw_url.to_string();
+                if raw_url.contains("uddg=") {
+                    if let Some(uddg_idx) = raw_url.find("uddg=") {
+                        let param = &raw_url[uddg_idx + 5..];
+                        let end_param = param.find('&').unwrap_or(param.len());
+                        if let Ok(decoded) = urlencoding::decode(&param[..end_param]) {
+                            clean_url = decoded.into_owned();
+                        }
+                    }
+                }
+
+                let title = if let Some(tag_end) = rest.find('>') {
+                    if let Some(close_a) = rest[tag_end + 1..].find("</a>") {
+                        strip_html_tags(&rest[tag_end + 1..tag_end + 1 + close_a])
+                    } else {
+                        "Web検索結果".to_string()
+                    }
+                } else {
+                    "Web検索結果".to_string()
+                };
+
+                let snippet = if let Some(snip_idx) = part.find("result__snippet") {
+                    let snip_part = &part[snip_idx..];
+                    if let Some(tag_end) = snip_part.find('>') {
+                        if let Some(close_a) = snip_part[tag_end + 1..].find("</a>") {
+                            strip_html_tags(&snip_part[tag_end + 1..tag_end + 1 + close_a])
+                        } else {
+                            "概要なし".to_string()
+                        }
+                    } else {
+                        "概要なし".to_string()
+                    }
+                } else {
+                    "概要なし".to_string()
+                };
+
+                if !clean_url.is_empty() && clean_url.starts_with("http") {
+                    list.push(SearchResultNative {
+                        title,
+                        url: clean_url,
+                        snippet,
+                        engine: "DuckDuckGo Native".to_string(),
+                    });
+                }
+            }
+        }
+    }
+    list
+}
+
+#[tauri::command]
+async fn fetch_web_search_native(
+    query: String,
+    searxng_url: Option<String>,
+) -> Result<Vec<SearchResultNative>, String> {
+    let client = match reqwest::Client::builder()
+        .timeout(Duration::from_secs(6))
+        .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => return Err(e.to_string()),
+    };
+
+    let mut articles: Vec<SearchResultNative> = Vec::new();
+
+    // 1. SearXNG
+    if let Some(ref base_url) = searxng_url {
+        let clean_url = base_url.trim().trim_end_matches('/');
+        if !clean_url.is_empty() {
+            let searx_endpoint = format!("{}/search?q={}&format=json", clean_url, urlencoding::encode(&query));
+            if let Ok(resp) = client.get(&searx_endpoint).send().await {
+                if resp.status().is_success() {
+                    if let Ok(json_val) = resp.json::<serde_json::Value>().await {
+                        if let Some(results_arr) = json_val.get("results").and_then(|r| r.as_array()) {
+                            for item in results_arr.iter().take(5) {
+                                let title = item.get("title").and_then(|v| v.as_str()).unwrap_or("無題").to_string();
+                                let url = item.get("url").and_then(|v| v.as_str()).unwrap_or("#").to_string();
+                                let snippet = item.get("content")
+                                    .or_else(|| item.get("snippet"))
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("概要なし")
+                                    .to_string();
+                                let engine = item.get("engine").and_then(|v| v.as_str()).unwrap_or("SearXNG").to_string();
+
+                                if !url.is_empty() && url != "#" {
+                                    articles.push(SearchResultNative { title, url, snippet, engine });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if !articles.is_empty() {
+        return Ok(articles);
+    }
+
+    // 2. DuckDuckGo HTML Search via Native HTTP
+    let ddg_url = format!("https://html.duckduckgo.com/html/?q={}", urlencoding::encode(&query));
+    if let Ok(resp) = client.get(&ddg_url).send().await {
+        if resp.status().is_success() {
+            if let Ok(html) = resp.text().await {
+                let parsed = parse_ddg_html(&html);
+                if !parsed.is_empty() {
+                    return Ok(parsed);
+                }
+            }
+        }
+    }
+
+    // 3. Wikipedia Search with keyword filter
+    let wiki_url = format!(
+        "https://ja.wikipedia.org/w/api.php?action=query&list=search&srsearch={}&format=json",
+        urlencoding::encode(&query)
+    );
+    if let Ok(resp) = client.get(&wiki_url).send().await {
+        if resp.status().is_success() {
+            if let Ok(json_val) = resp.json::<serde_json::Value>().await {
+                if let Some(items) = json_val.pointer("/query/search").and_then(|v| v.as_array()) {
+                    let keywords: Vec<String> = query
+                        .split_whitespace()
+                        .map(|s| s.to_lowercase())
+                        .filter(|s| s.len() > 1)
+                        .collect();
+
+                    for item in items.iter().take(5) {
+                        let title = item.get("title").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let snippet_raw = item.get("snippet").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let snippet = strip_html_tags(&snippet_raw);
+
+                        let combined = format!("{} {}", title.to_lowercase(), snippet.to_lowercase());
+                        let matches = keywords.is_empty() || keywords.iter().any(|kw| combined.contains(kw));
+
+                        if matches && !title.is_empty() {
+                            articles.push(SearchResultNative {
+                                title: title.clone(),
+                                url: format!("https://ja.wikipedia.org/wiki/{}", urlencoding::encode(&title)),
+                                snippet,
+                                engine: "Wikipedia".to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if !articles.is_empty() {
+        return Ok(articles);
+    }
+
+    Err(format!("「{}」に関するWeb検索結果を取得できませんでした。", query))
 }
 
 #[tauri::command]
@@ -98,7 +295,8 @@ fn main() {
             resize_window,
             open_external_url,
             set_tray_animating,
-            update_tray_badge
+            update_tray_badge,
+            fetch_web_search_native
         ])
         .on_window_event(|window, event| match event {
             WindowEvent::CloseRequested { api, .. } => {

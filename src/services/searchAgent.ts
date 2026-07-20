@@ -204,12 +204,27 @@ function generateRuleBasedOptimizedQuery(rawQuery: string): string {
 }
 
 /**
- * Fetch search results from SearXNG endpoint with DuckDuckGo fallback
+ * Fetch search results from SearXNG / Native Rust Web Search with DuckDuckGo fallback
  */
 async function fetchWebResults(query: string, settings: AppSettings): Promise<SourceArticle[]> {
-  const searxUrl = settings.searxngUrl.replace(/\/$/, '');
+  // 1. Try Native Rust Web Search when running in Tauri (bypasses browser CORS restrictions)
+  if (window.__TAURI__) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const nativeResults = await invoke<SourceArticle[]>('fetch_web_search_native', {
+        query,
+        searxngUrl: settings.searxngUrl,
+      });
+      if (nativeResults && nativeResults.length > 0) {
+        return nativeResults;
+      }
+    } catch (e) {
+      console.warn('Native Rust Web Search failed, falling back to browser fetch:', e);
+    }
+  }
 
-  // 1. Try SearXNG first
+  // 2. Try SearXNG Endpoint (Browser fetch)
+  const searxUrl = settings.searxngUrl.replace(/\/$/, '');
   try {
     const response = await fetch(`${searxUrl}/search?q=${encodeURIComponent(query)}&format=json`, {
       method: 'GET',
@@ -233,7 +248,7 @@ async function fetchWebResults(query: string, settings: AppSettings): Promise<So
     console.warn(`SearXNG (${searxUrl}) unavailable/CORS restricted, falling back to DuckDuckGo:`, e);
   }
 
-  // 2. Automatic Fallback to Real Web Search (DuckDuckGo & Wikipedia)
+  // 3. Automatic Fallback to Real Web Search (DuckDuckGo & Wikipedia)
   return fetchDuckDuckGoResults(query);
 }
 
@@ -323,7 +338,7 @@ async function fetchDuckDuckGoResults(query: string): Promise<SourceArticle[]> {
     return articles;
   }
 
-  // C. Fallback: Wikipedia API Search
+  // C. Fallback: Wikipedia API Search with strict keyword relevance filter
   try {
     const wikiRes = await fetch(
       `https://ja.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`
@@ -331,12 +346,28 @@ async function fetchDuckDuckGoResults(query: string): Promise<SourceArticle[]> {
     if (wikiRes.ok) {
       const wikiData = await wikiRes.json();
       if (wikiData.query?.search && wikiData.query.search.length > 0) {
-        return wikiData.query.search.slice(0, 4).map((item: any) => ({
-          title: item.title,
-          url: `https://ja.wikipedia.org/wiki/${encodeURIComponent(item.title)}`,
-          snippet: item.snippet.replace(/<[^>]+>/g, ''),
-          engine: 'Wikipedia',
-        }));
+        const queryKeywords = query
+          .split(/\s+/)
+          .map((w) => w.trim().toLowerCase())
+          .filter((w) => w.length > 1);
+
+        const relevantItems = wikiData.query.search.filter((item: any) => {
+          const title = (item.title || '').toLowerCase();
+          const snippet = (item.snippet || '').replace(/<[^>]+>/g, '').toLowerCase();
+          const combined = `${title} ${snippet}`;
+
+          if (queryKeywords.length === 0) return true;
+          return queryKeywords.some((kw) => combined.includes(kw));
+        });
+
+        if (relevantItems.length > 0) {
+          return relevantItems.slice(0, 4).map((item: any) => ({
+            title: item.title,
+            url: `https://ja.wikipedia.org/wiki/${encodeURIComponent(item.title)}`,
+            snippet: item.snippet.replace(/<[^>]+>/g, ''),
+            engine: 'Wikipedia',
+          }));
+        }
       }
     }
   } catch (e) {
