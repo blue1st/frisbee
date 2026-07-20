@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useFrisbeeStore } from '../services/store';
-import { ReviewItem } from '../types';
+import { ReviewItem, StockFormat } from '../types';
 import { AskDogModal } from './AskDogModal';
+import { FormattedContentView } from './FormattedContentView';
 import { openExternalUrl } from '../utils/openUrl';
-import { Check, RefreshCw, X, ExternalLink, Tag, Sparkles, Inbox, MessageSquare } from 'lucide-react';
+import { Check, RefreshCw, X, ExternalLink, Tag, Sparkles, Inbox, MessageSquare, Table, List, FileText, Layers } from 'lucide-react';
 
 export const ReviewQueue: React.FC = () => {
   const reviewItems = useFrisbeeStore((state) => state.reviewItems);
@@ -15,19 +16,28 @@ export const ReviewQueue: React.FC = () => {
   const pendingItems = reviewItems.filter((item) => item.status === 'pending');
   const [userNote, setUserNote] = useState<{ [id: string]: string }>({});
   const [customTagInput, setCustomTagInput] = useState<{ [id: string]: string }>({});
+  const [selectedFormats, setSelectedFormats] = useState<{ [id: string]: StockFormat }>({});
   const [activeAskItem, setActiveAskItem] = useState<ReviewItem | null>(null);
 
-  const handleAccept = (id: string, suggestedTags: string[]) => {
-    const note = userNote[id] || '';
-    const extraTag = customTagInput[id]?.trim();
+  const handleAccept = (item: ReviewItem, suggestedTags: string[]) => {
+    const note = userNote[item.id] || '';
+    const extraTag = customTagInput[item.id]?.trim();
     const finalTags = extraTag ? [...suggestedTags, extraTag] : suggestedTags;
+    const format = selectedFormats[item.id] || item.format || 'full';
 
-    acceptReviewItem(id, note, finalTags);
+    acceptReviewItem(item.id, note, finalTags, format);
   };
 
   const handleDrop = (id: string) => {
     updateReviewStatus(id, 'dropped');
   };
+
+  const FORMAT_OPTIONS: { id: StockFormat; label: string; icon: React.ReactNode }[] = [
+    { id: 'full', label: '全統合', icon: <Layers className="w-3.5 h-3.5" /> },
+    { id: 'table', label: 'データ表', icon: <Table className="w-3.5 h-3.5" /> },
+    { id: 'bullet', label: '箇条書き', icon: <List className="w-3.5 h-3.5" /> },
+    { id: 'summary', label: '短文要約', icon: <FileText className="w-3.5 h-3.5" /> },
+  ];
 
   return (
     <div className="flex flex-col h-full p-6 space-y-6 overflow-y-auto relative">
@@ -124,22 +134,41 @@ export const ReviewQueue: React.FC = () => {
                 </button>
               </div>
 
-              {/* Summary Block */}
-              <div className="p-4 rounded-xl bg-[#0f111a] border border-slate-800 text-slate-200 text-sm leading-relaxed space-y-3">
-                <p className="font-medium text-slate-200">{item.summary}</p>
-
-                {/* Key Takeaways */}
-                {item.keyTakeaways && item.keyTakeaways.length > 0 && (
-                  <div className="pt-2 border-t border-slate-800 space-y-1.5">
-                    <span className="text-xs font-bold text-amber-400">💡 重要なポイント (具体的データ):</span>
-                    <ul className="list-disc list-inside space-y-1 text-xs text-slate-300">
-                      {item.keyTakeaways.map((point, idx) => (
-                        <li key={idx}>{point}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+              {/* Format Selection Bar */}
+              <div className="flex items-center justify-between bg-[#111320] px-3 py-2 rounded-xl border border-slate-800">
+                <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  保存・閲覧形式の選択:
+                </span>
+                <div className="flex items-center gap-1 bg-[#181c2e] p-1 rounded-lg border border-slate-800">
+                  {FORMAT_OPTIONS.map((opt) => {
+                    const currentFormat = selectedFormats[item.id] || item.format || 'full';
+                    const isActive = currentFormat === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        onClick={() =>
+                          setSelectedFormats({ ...selectedFormats, [item.id]: opt.id })
+                        }
+                        className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                          isActive
+                            ? 'bg-amber-400 text-slate-950 shadow-sm'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                        }`}
+                      >
+                        {opt.icon}
+                        <span>{opt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+
+              {/* Formatted Content Interactive Preview */}
+              <FormattedContentView
+                item={item}
+                format={selectedFormats[item.id] || item.format || 'full'}
+              />
 
               {/* Source URLs */}
               <div className="space-y-2">
@@ -229,7 +258,7 @@ export const ReviewQueue: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={() => handleAccept(item.id, item.suggestedTags)}
+                  onClick={() => handleAccept(item, item.suggestedTags)}
                   className="flex items-center gap-2 px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow-lg shadow-emerald-500/20 transition-all transform hover:scale-[1.02]"
                 >
                   <Check className="w-4 h-4 stroke-[3]" />

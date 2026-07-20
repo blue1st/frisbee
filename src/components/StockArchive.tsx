@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { useFrisbeeStore } from '../services/store';
-import { StockItem } from '../types';
+import { StockItem, StockFormat } from '../types';
 import { AskDogModal } from './AskDogModal';
+import { FormattedContentView } from './FormattedContentView';
 import { openExternalUrl } from '../utils/openUrl';
-import { Database, Search, Tag, ExternalLink, Trash2, Calendar, FileText, MessageSquare } from 'lucide-react';
+import { Database, Search, ExternalLink, Trash2, Calendar, FileText, MessageSquare, Table, List, Layers, Sparkles } from 'lucide-react';
 
 export const StockArchive: React.FC = () => {
   const stockItems = useFrisbeeStore((state) => state.stockItems);
   const removeStockItem = useFrisbeeStore((state) => state.removeStockItem);
+  const updateStockFormat = useFrisbeeStore((state) => state.updateStockFormat);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [activeAskItem, setActiveAskItem] = useState<StockItem | null>(null);
@@ -28,6 +30,13 @@ export const StockArchive: React.FC = () => {
 
     return matchesSearch && matchesTag;
   });
+
+  const FORMAT_OPTIONS: { id: StockFormat; label: string; icon: React.ReactNode }[] = [
+    { id: 'full', label: '全統合', icon: <Layers className="w-3.5 h-3.5" /> },
+    { id: 'table', label: 'データ表', icon: <Table className="w-3.5 h-3.5" /> },
+    { id: 'bullet', label: '箇条書き', icon: <List className="w-3.5 h-3.5" /> },
+    { id: 'summary', label: '短文要約', icon: <FileText className="w-3.5 h-3.5" /> },
+  ];
 
   return (
     <div className="flex flex-col h-full p-6 space-y-6 overflow-y-auto relative">
@@ -92,101 +101,130 @@ export const StockArchive: React.FC = () => {
           <p className="text-slate-400 text-sm">条件に一致するストックナレッジはありません。</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4">
-          {filteredItems.map((item) => (
-            <div
-              key={item.id}
-              className="bg-[#171a29] rounded-2xl border border-slate-700/70 p-5 space-y-3 hover:border-slate-600 transition-all shadow-md"
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-100">{item.query}</h3>
-                  {item.subQueries && item.subQueries.length > 1 ? (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      <span className="text-[10px] text-cyan-300 font-bold bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-800">
-                        ⚡ マルチ比較 ({item.subQueries.length}角度): {item.subQueries.join(' | ')}
+        <div className="grid grid-cols-1 gap-5">
+          {filteredItems.map((item) => {
+            const currentFormat = item.format || 'full';
+
+            return (
+              <div
+                key={item.id}
+                className="bg-[#171a29] rounded-2xl border border-slate-700/80 p-5 space-y-4 hover:border-slate-600 transition-all shadow-xl"
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-100">{item.query}</h3>
+                    {item.subQueries && item.subQueries.length > 1 ? (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        <span className="text-[10px] text-cyan-300 font-bold bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-800">
+                          ⚡ マルチ比較 ({item.subQueries.length}角度): {item.subQueries.join(' | ')}
+                        </span>
+                      </div>
+                    ) : (
+                      item.optimizedQuery && (
+                        <div className="flex items-center gap-1.5 text-xs text-amber-300 font-mono mt-1 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 max-w-fit">
+                          <span>🎯 最適化ワード:</span>
+                          <span className="font-bold">{item.optimizedQuery}</span>
+                        </div>
+                      )
+                    )}
+                    <div className="flex items-center gap-3 text-xs text-slate-400 mt-1 font-mono">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                        {new Date(item.savedAt).toLocaleDateString('ja-JP')}
                       </span>
                     </div>
-                  ) : (
-                    item.optimizedQuery && (
-                      <div className="flex items-center gap-1.5 text-xs text-amber-300 font-mono mt-1 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 max-w-fit">
-                        <span>🎯 最適化ワード:</span>
-                        <span className="font-bold">{item.optimizedQuery}</span>
-                      </div>
-                    )
-                  )}
-                  <div className="flex items-center gap-3 text-xs text-slate-400 mt-1 font-mono">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                      {new Date(item.savedAt).toLocaleDateString('ja-JP')}
-                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setActiveAskItem(item)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold transition-all shadow-sm"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>質問する</span>
+                    </button>
+
+                    <button
+                      onClick={() => removeStockItem(item.id)}
+                      className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors"
+                      title="削除"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setActiveAskItem(item)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold transition-all shadow-sm"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>質問する</span>
-                  </button>
+                {/* View Format Switcher */}
+                <div className="flex items-center justify-between bg-[#111320] px-3 py-1.5 rounded-xl border border-slate-800/80">
+                  <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    閲覧形式:
+                  </span>
+                  <div className="flex items-center gap-1 bg-[#181c2e] p-1 rounded-lg border border-slate-800">
+                    {FORMAT_OPTIONS.map((opt) => {
+                      const isActive = currentFormat === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          onClick={() => updateStockFormat(item.id, opt.id)}
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold transition-all ${
+                            isActive
+                              ? 'bg-amber-400 text-slate-950 shadow-sm'
+                              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                          }`}
+                        >
+                          {opt.icon}
+                          <span>{opt.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-                  <button
-                    onClick={() => removeStockItem(item.id)}
-                    className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors"
-                    title="削除"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                {/* Formatted Content View */}
+                <FormattedContentView item={item} format={currentFormat} />
+
+                {/* User Notes */}
+                {item.userNotes && (
+                  <div className="text-xs text-amber-300/90 bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/20">
+                    💬 <span className="font-semibold">メモ:</span> {item.userNotes}
+                  </div>
+                )}
+
+                {/* Tags & Sources */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 text-xs border-t border-slate-800/80">
+                  <div className="flex flex-wrap gap-1.5">
+                    {item.tags.map((t) => (
+                      <span
+                        key={t}
+                        className="px-2 py-0.5 rounded bg-slate-800 text-amber-400 border border-slate-700 text-[11px] font-mono"
+                      >
+                        #{t}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {item.sources.map((src, idx) => (
+                      <a
+                        key={idx}
+                        href={src.url}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          openExternalUrl(src.url);
+                        }}
+                        className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-amber-300 underline underline-offset-2 cursor-pointer"
+                        title={src.title}
+                      >
+                        <span>[Source {idx + 1}]</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    ))}
+                  </div>
                 </div>
               </div>
-
-              {/* Summary */}
-              <p className="text-sm text-slate-300 leading-relaxed bg-[#0f111a] p-3 rounded-xl border border-slate-800">
-                {item.summary}
-              </p>
-
-              {/* User Notes */}
-              {item.userNotes && (
-                <div className="text-xs text-amber-300/90 bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/20">
-                  💬 <span className="font-semibold">メモ:</span> {item.userNotes}
-                </div>
-              )}
-
-              {/* Tags & Sources */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 text-xs">
-                <div className="flex flex-wrap gap-1.5">
-                  {item.tags.map((t) => (
-                    <span
-                      key={t}
-                      className="px-2 py-0.5 rounded bg-slate-800 text-amber-400 border border-slate-700 text-[11px] font-mono"
-                    >
-                      #{t}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {item.sources.map((src, idx) => (
-                    <a
-                      key={idx}
-                      href={src.url}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        openExternalUrl(src.url);
-                      }}
-                      className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-amber-300 underline underline-offset-2 cursor-pointer"
-                      title={src.title}
-                    >
-                      <span>[Source {idx + 1}]</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -200,3 +238,4 @@ export const StockArchive: React.FC = () => {
     </div>
   );
 };
+

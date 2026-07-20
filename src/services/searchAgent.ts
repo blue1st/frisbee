@@ -1,4 +1,4 @@
-import { FrisbeeTask, AppSettings, SourceArticle, ReviewItem, StockItem } from '../types';
+import { FrisbeeTask, AppSettings, SourceArticle, ReviewItem, StockItem, TableData } from '../types';
 import { useFrisbeeStore } from './store';
 
 // Delay helper
@@ -60,23 +60,7 @@ export async function executeTask(task: FrisbeeTask, settings: AppSettings) {
         : '得られたWeb情報を分析・具体的要約を構築中...'
     );
 
-    const { summary, keyTakeaways, suggestedTags } = await summarizeAndClassify(task.query, allSources, settings);
 
-    await sleep(600);
-
-    // 4. Complete and add to Review Queue (咥えて戻ってきたフリスビー)
-    store.updateTaskStatus(task.id, 'completed', 100, '探索完了！多角ソースから統合マージして持ち帰りました。');
-
-    store.addReviewItem({
-      taskId: task.id,
-      query: task.query,
-      optimizedQuery: subQueries[0],
-      subQueries: isMultiAngle ? subQueries : undefined,
-      summary,
-      keyTakeaways,
-      sources: allSources,
-      suggestedTags,
-    });
 
     // Notify if enabled
     if (settings.notifyOnFetchComplete) {
@@ -382,13 +366,13 @@ async function summarizeAndClassify(
   query: string,
   sources: SourceArticle[],
   settings: AppSettings
-): Promise<{ summary: string; keyTakeaways: string[]; suggestedTags: string[] }> {
+): Promise<{ summary: string; keyTakeaways: string[]; suggestedTags: string[]; tableData?: TableData }> {
 
   if (settings.aiProvider === 'openai' && settings.aiApiKey) {
     try {
       const prompt = `
-あなたは優秀で極めて具体的なWebリサーチ助手です。
-以下の検索テーマおよび集約された複数のWeb検索結果（直接比較記事＋個別詳細データ）を包括的に分析し、**具体性と対比構造のある日本語要約**を作成してください。
+あなたはお手伝い大好きな優秀かつ極めて具体的なWebリサーチ助手です。
+以下の検索テーマおよび集約された複数のWeb検索結果を包括的に分析し、**具体性と対比構造のある日本語要約**と**構造化テーブルデータ**を作成してください。
 
 検索テーマ: ${query}
 
@@ -396,9 +380,10 @@ async function summarizeAndClassify(
 ${sources.map((s, idx) => `[ソース${idx + 1}] ${s.title}\nURL: ${s.url}\n内容: ${s.snippet}`).join('\n\n')}
 
 【指示項目】:
-1. 要約 (summary): 各エンティティの個別特徴・性能スペック比較・違い・用途別のおすすめなどを明確にし、具体的数値や時期を添えて要約を作成してください（250〜400文字程度）。
+1. 要約 (summary): 各エンティティ的個別特徴・性能スペック比較・違い・用途別のおすすめなどを明確にし、具体的数値や時期を添えて要約を作成（200〜350文字）。
 2. 重要ポイント (keyTakeaways): 比較の重要視点や決定的な違いを3〜4点の箇条書きで抽出。
 3. カテゴリタグ (suggestedTags): 関連する固有名称やタグを3〜5個作成。
+4. 表形式データ (tableData): 比較・スペック・調査要素を3〜5行のヘッダー・行構成で抽出 (headers, rows)。
 
 以下のJSONフォーマットのみで返答してください:
 {
@@ -561,7 +546,7 @@ function generateDemoSources(query: string): SourceArticle[] {
 function generateRichDemoSummary(
   query: string,
   sources: SourceArticle[]
-): { summary: string; keyTakeaways: string[]; suggestedTags: string[] } {
+): { summary: string; keyTakeaways: string[]; suggestedTags: string[]; tableData?: TableData } {
   if (sources && sources.length > 0) {
     const validSnippets = sources
       .map((s) => s.snippet)
@@ -580,10 +565,21 @@ function generateRichDemoSummary(
     const words = query.split(/\s+/).filter((w) => w.length > 1);
     const suggestedTags = Array.from(new Set([...words, 'Web検索', '最新調査'])).slice(0, 5);
 
+    // Create tableData based on sources or query
+    const tableData: TableData = {
+      headers: ['情報ソース', 'エンジン', '主要トピック / 概要'],
+      rows: sources.slice(0, 4).map((s) => [
+        s.title.length > 20 ? `${s.title.substring(0, 20)}...` : s.title,
+        s.engine || 'Web',
+        s.snippet.length > 40 ? `${s.snippet.substring(0, 40)}...` : s.snippet,
+      ]),
+    };
+
     return {
       summary: summaryText.substring(0, 450),
       keyTakeaways,
       suggestedTags,
+      tableData,
     };
   }
 

@@ -23,7 +23,8 @@ interface FrisbeeState {
   addReviewItem: (item: Omit<ReviewItem, 'id' | 'fetchedAt' | 'status'>) => void;
   updateReviewStatus: (id: string, status: ReviewItem['status']) => void;
   
-  acceptReviewItem: (id: string, userNotes?: string, customTags?: string[]) => void;
+  acceptReviewItem: (id: string, userNotes?: string, customTags?: string[], selectedFormat?: FrisbeeState['stockItems'][0]['format']) => void;
+  updateStockFormat: (id: string, format: FrisbeeState['stockItems'][0]['format']) => void;
   retryTask: (reviewItemId: string) => void;
 
   removeStockItem: (id: string) => void;
@@ -64,6 +65,14 @@ const INITIAL_DEMO_REVIEWS: ReviewItem[] = [
       'Event payload の軽量化によるプロセス間通信高速化',
       'macOS / Windows / Linux それぞれの権限設定パターン'
     ],
+    tableData: {
+      headers: ['評価項目', 'Tauri v1', 'Tauri v2'],
+      rows: [
+        ['メモリ消費量', '約 30MB', '約 15MB 以下'],
+        ['モバイル対応', '未対応/実験的', 'iOS / Android 公式対応'],
+        ['トレイAPI', '基本トレイのみ', '動的TrayIconBuilder API'],
+      ],
+    },
     sources: [
       { title: 'Tauri v2 Architecture Deep Dive', url: 'https://tauri.app/blog/v2-launch', snippet: 'Exploring lightweight system tray architecture and async IPC event loops.' },
       { title: 'Rust Tray Application Best Practices', url: 'https://example.com/rust-tray', snippet: 'How to manage memory efficiently in long-running rust desktop agents.' }
@@ -71,6 +80,7 @@ const INITIAL_DEMO_REVIEWS: ReviewItem[] = [
     suggestedTags: ['Tauri', 'Rust', 'DesktopApp', 'Optimization'],
     fetchedAt: new Date(Date.now() - 3600000).toISOString(),
     status: 'pending',
+    format: 'full',
   }
 ];
 
@@ -79,13 +89,22 @@ const INITIAL_DEMO_STOCKS: StockItem[] = [
     id: 'demo-stock-1',
     query: 'Vite 6 SSR & Dynamic Import 速度比較',
     summary: 'Vite 6でのビルド速度向上とダイナミックインポートのキャッシュ最適化技術についての調査結果。モジュールキャッシュ戦略によりコールドスタートが40%短縮。',
-    keyTakeaways: ['Esbuild統合の高速化', 'HMR通信のWebSocket最適化'],
+    keyTakeaways: ['Esbuild統合の高速化', 'HMR通信のWebSocket最適化', 'SSRの環境隔離強化'],
+    tableData: {
+      headers: ['比較指標', 'Vite 5', 'Vite 6 (最新)'],
+      rows: [
+        ['コールドスタート時間', '1.2 秒', '0.7 秒 (-40%)'],
+        ['HMR応答速度', '45 ms', '18 ms'],
+        ['SSR モジュール分離', '部分制限あり', '完全アイソレーション'],
+      ],
+    },
     tags: ['Vite', 'Frontend', 'Performance'],
     sources: [
       { title: 'Vite 6 Benchmark Reports', url: 'https://vitejs.dev', snippet: 'Benchmark of cold start and HMR updates.' }
     ],
     savedAt: new Date(Date.now() - 86400000).toISOString(),
-    userNotes: '今後のフロントエンドプロジェクトのベース選定に利用'
+    userNotes: '今後のフロントエンドプロジェクトのベース選定に利用',
+    format: 'table',
   }
 ];
 
@@ -144,6 +163,7 @@ export const useFrisbeeStore = create<FrisbeeState>()(
           id: `review-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           fetchedAt: new Date().toISOString(),
           status: 'pending',
+          format: itemData.format || 'full',
         };
 
         set((state) => ({
@@ -159,7 +179,7 @@ export const useFrisbeeStore = create<FrisbeeState>()(
         }));
       },
 
-      acceptReviewItem: (id, userNotes, customTags) => {
+      acceptReviewItem: (id, userNotes, customTags, selectedFormat) => {
         const item = get().reviewItems.find((r) => r.id === id);
         if (!item) return;
 
@@ -170,16 +190,26 @@ export const useFrisbeeStore = create<FrisbeeState>()(
           subQueries: item.subQueries,
           summary: item.summary,
           keyTakeaways: item.keyTakeaways,
+          tableData: item.tableData,
           userNotes,
           tags: customTags && customTags.length > 0 ? customTags : item.suggestedTags,
           sources: item.sources,
           savedAt: new Date().toISOString(),
+          format: selectedFormat || item.format || 'full',
         };
 
         set((state) => ({
           stockItems: [newStock, ...state.stockItems],
           reviewItems: state.reviewItems.map((r) =>
             r.id === id ? { ...r, status: 'accepted' as const } : r
+          ),
+        }));
+      },
+
+      updateStockFormat: (id, format) => {
+        set((state) => ({
+          stockItems: state.stockItems.map((s) =>
+            s.id === id ? { ...s, format } : s
           ),
         }));
       },

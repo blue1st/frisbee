@@ -21,6 +21,13 @@ export interface SourceArticle {
   engine?: string;
 }
 
+export type StockFormat = 'full' | 'table' | 'bullet' | 'summary';
+
+export interface TableData {
+  headers: string[];
+  rows: string[][];
+}
+
 export interface ReviewItem {
   id: string;
   taskId: string;
@@ -33,6 +40,8 @@ export interface ReviewItem {
   suggestedTags: string[];
   fetchedAt: string;
   status: ReviewStatus;
+  format?: StockFormat;
+  tableData?: TableData;
 }
 
 export interface StockItem {
@@ -46,6 +55,8 @@ export interface StockItem {
   tags: string[];
   sources: SourceArticle[];
   savedAt: string;
+  format?: StockFormat;
+  tableData?: TableData;
 }
 
 export interface AppSettings {
