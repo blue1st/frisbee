@@ -37,20 +37,27 @@ export const SettingsModal: React.FC = () => {
     setSearxngTestStatus('idle');
     setSearxngTestMsg(null);
 
-    // If running in Tauri Desktop app, invoke Rust native command (bypasses WKWebView Mixed Content/CORS restrictions)
-    if (window.__TAURI__) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const msg = await invoke<string>('test_searxng_native', { url: searxngUrl });
-        setSearxngTestStatus('success');
-        setSearxngTestMsg(msg);
-      } catch (err: any) {
-        setSearxngTestStatus('error');
-        setSearxngTestMsg(typeof err === 'string' ? err : err.message || '接続に失敗しました。');
-      } finally {
-        setIsTestingSearxng(false);
-      }
+    // Try Tauri native command first (bypasses WKWebView Mixed Content/CORS restrictions)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const msg = await invoke<string>('test_searxng_native', { url: searxngUrl });
+      setSearxngTestStatus('success');
+      setSearxngTestMsg(msg);
+      setIsTestingSearxng(false);
       return;
+    } catch (err: any) {
+      if (typeof err === 'string') {
+        setSearxngTestStatus('error');
+        setSearxngTestMsg(err);
+        setIsTestingSearxng(false);
+        return;
+      }
+      if (err && typeof err === 'object' && err.message && !err.message.includes('ipc') && !err.message.includes('not found')) {
+        setSearxngTestStatus('error');
+        setSearxngTestMsg(err.message);
+        setIsTestingSearxng(false);
+        return;
+      }
     }
 
     const baseUrl = searxngUrl.trim().replace(/\/$/, '');

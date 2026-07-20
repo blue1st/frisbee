@@ -207,20 +207,18 @@ function generateRuleBasedOptimizedQuery(rawQuery: string): string {
  * Fetch search results from SearXNG / Native Rust Web Search with DuckDuckGo fallback
  */
 async function fetchWebResults(query: string, settings: AppSettings): Promise<SourceArticle[]> {
-  // 1. Try Native Rust Web Search when running in Tauri (bypasses browser CORS restrictions)
-  if (window.__TAURI__) {
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const nativeResults = await invoke<SourceArticle[]>('fetch_web_search_native', {
-        query,
-        searxngUrl: settings.searxngUrl,
-      });
-      if (nativeResults && nativeResults.length > 0) {
-        return nativeResults;
-      }
-    } catch (e) {
-      console.warn('Native Rust Web Search failed, falling back to browser fetch:', e);
+  // 1. Try Native Rust Web Search when running in Tauri (bypasses browser CORS/ATS restrictions)
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const nativeResults = await invoke<SourceArticle[]>('fetch_web_search_native', {
+      query,
+      searxngUrl: settings.searxngUrl,
+    });
+    if (nativeResults && nativeResults.length > 0) {
+      return nativeResults;
     }
+  } catch (e) {
+    console.warn('Native Rust Web Search failed or in browser mode, falling back to browser fetch:', e);
   }
 
   // 2. Try SearXNG Endpoint (Browser fetch)
