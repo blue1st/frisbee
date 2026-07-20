@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="128" fill="#12141d"/>
+  
+  <!-- Glowing Trail -->
+  <path d="M 60 380 Q 256 120 450 220" fill="none" stroke="#fbbf24" stroke-width="12" opacity="0.3" stroke-dasharray="16 12"/>
+  
+  <!-- Flying Frisbee -->
+  <g transform="translate(380, 180) rotate(-15)">
+    <ellipse cx="0" cy="0" rx="60" ry="18" fill="#fbbf24"/>
+    <ellipse cx="0" cy="-4" rx="42" ry="10" fill="#fef9e7"/>
+  </g>
+
+  <!-- Running Dog Pixel Art Silhouette -->
+  <g transform="translate(100, 220)">
+    <!-- Tail -->
+    <path d="M 0 60 L 20 20 L 40 40 Z" fill="#e67e22"/>
+    <rect x="15" y="15" width="15" height="15" fill="#fdfefe"/>
+    <!-- Body -->
+    <rect x="30" y="50" width="140" height="80" rx="10" fill="#e67e22"/>
+    <!-- White Belly -->
+    <rect x="70" y="90" width="70" height="40" rx="5" fill="#fdfefe"/>
+    <!-- Collar -->
+    <rect x="160" y="45" width="20" height="60" fill="#e74c3c"/>
+    <!-- Head -->
+    <rect x="170" y="10" width="80" height="80" rx="8" fill="#e67e22"/>
+    <!-- Ears -->
+    <polygon points="180,10 200,-30 220,10" fill="#d35400"/>
+    <polygon points="220,10 240,-30 260,10" fill="#d35400"/>
+    <!-- Snout & Mouth -->
+    <rect x="230" y="45" width="50" height="45" rx="5" fill="#fdfefe"/>
+    <rect x="235" y="38" width="20" height="18" fill="#17202a"/> <!-- Eye -->
+    <rect x="270" y="50" width="15" height="15" fill="#17202a"/> <!-- Nose -->
+    
+    <!-- Dynamic Running Legs (Front & Back) -->
+    <rect x="50" y="130" width="25" height="60" rx="5" fill="#d35400" transform="rotate(-25 50 130)"/>
+    <rect x="100" y="130" width="25" height="60" rx="5" fill="#d35400" transform="rotate(25 100 130)"/>
+    <rect x="160" y="130" width="25" height="60" rx="5" fill="#d35400" transform="rotate(-30 160 130)"/>
+    <rect x="200" y="130" width="25" height="60" rx="5" fill="#d35400" transform="rotate(30 200 130)"/>
+  </g>
+</svg>
