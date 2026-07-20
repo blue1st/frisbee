@@ -46,7 +46,6 @@ export interface StockItem {
   tags: string[];
   sources: SourceArticle[];
   savedAt: string;
-  rating?: number;
 }
 
 export interface AppSettings {

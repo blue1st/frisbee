@@ -3,7 +3,7 @@ import { useFrisbeeStore } from '../services/store';
 import { StockItem } from '../types';
 import { AskDogModal } from './AskDogModal';
 import { openExternalUrl } from '../utils/openUrl';
-import { Database, Search, Tag, ExternalLink, Trash2, Calendar, Star, FileText, MessageSquare } from 'lucide-react';
+import { Database, Search, Tag, ExternalLink, Trash2, Calendar, FileText, MessageSquare } from 'lucide-react';
 
 export const StockArchive: React.FC = () => {
   const stockItems = useFrisbeeStore((state) => state.stockItems);
@@ -120,11 +120,6 @@ export const StockArchive: React.FC = () => {
                       <Calendar className="w-3.5 h-3.5 text-slate-500" />
                       {new Date(item.savedAt).toLocaleDateString('ja-JP')}
                     </span>
-                    {item.rating && (
-                      <span className="flex items-center gap-0.5 text-amber-400">
-                        <Star className="w-3.5 h-3.5 fill-current" /> {item.rating}.0
-                      </span>
-                    )}
                   </div>
                 </div>
 

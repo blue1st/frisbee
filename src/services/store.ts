@@ -85,8 +85,7 @@ const INITIAL_DEMO_STOCKS: StockItem[] = [
       { title: 'Vite 6 Benchmark Reports', url: 'https://vitejs.dev', snippet: 'Benchmark of cold start and HMR updates.' }
     ],
     savedAt: new Date(Date.now() - 86400000).toISOString(),
-    userNotes: '今後のフロントエンドプロジェクトのベース選定に利用',
-    rating: 5
+    userNotes: '今後のフロントエンドプロジェクトのベース選定に利用'
   }
 ];
 
@@ -175,7 +174,6 @@ export const useFrisbeeStore = create<FrisbeeState>()(
           tags: customTags && customTags.length > 0 ? customTags : item.suggestedTags,
           sources: item.sources,
           savedAt: new Date().toISOString(),
-          rating: 4,
         };
 
         set((state) => ({
