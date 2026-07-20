@@ -214,6 +214,51 @@ async fn fetch_web_search_native(
 }
 
 #[tauri::command]
+async fn test_searxng_native(url: String) -> Result<String, String> {
+    let clean_url = url.trim().trim_end_matches('/');
+    if clean_url.is_empty() {
+        return Err("SearXNGのURLを入力してください。".to_string());
+    }
+
+    let client = match reqwest::Client::builder()
+        .timeout(Duration::from_secs(6))
+        .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => return Err(e.to_string()),
+    };
+
+    let test_endpoint = format!("{}/search?q=ping&format=json", clean_url);
+    match client.get(&test_endpoint).send().await {
+        Ok(resp) => {
+            let status = resp.status();
+            if status == reqwest::StatusCode::FORBIDDEN {
+                return Err("SearXNG サーバーに接続できましたが、JSON APIフォーマットが無効化されています (403 Forbidden)。".to_string());
+            }
+            if !status.is_success() {
+                return Err(format!("HTTP エラー {}: {}", status.as_u16(), status.canonical_reason().unwrap_or("Unknown")));
+            }
+
+            match resp.json::<serde_json::Value>().await {
+                Ok(data) => {
+                    let hits = data.get("results").and_then(|r| r.as_array()).map(|arr| arr.len()).unwrap_or(0);
+                    Ok(format!("SearXNG 疎通成功！ (API正常応答, 取得サンプル数: {}件)", hits))
+                }
+                Err(_) => Err("レスポンスがJSON形式ではありません。SearXNGのJSON API有効化を確認してください。".to_string()),
+            }
+        }
+        Err(err) => {
+            if err.is_timeout() {
+                Err("接続タイムアウト: SearXNG サーバーからの応答がありませんでした (6秒超過)。".to_string())
+            } else {
+                Err(format!("接続失敗: {}", err))
+            }
+        }
+    }
+}
+
+#[tauri::command]
 fn hide_window(window: tauri::Window) {
     let _ = window.hide();
 }
@@ -296,7 +341,8 @@ fn main() {
             open_external_url,
             set_tray_animating,
             update_tray_badge,
-            fetch_web_search_native
+            fetch_web_search_native,
+            test_searxng_native
         ])
         .on_window_event(|window, event| match event {
             WindowEvent::CloseRequested { api, .. } => {
