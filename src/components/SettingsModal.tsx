@@ -14,11 +14,83 @@ export const SettingsModal: React.FC = () => {
   const [notifyOnFetchComplete, setNotifyOnFetchComplete] = useState(settings.notifyOnFetchComplete);
   const [isSaved, setIsSaved] = useState(false);
 
+  // SearXNG Connection test state
+  const [isTestingSearxng, setIsTestingSearxng] = useState(false);
+  const [searxngTestStatus, setSearxngTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [searxngTestMsg, setSearxngTestMsg] = useState<string | null>(null);
+
   // Connection & Model Fetch state
   const [isFetchingModels, setIsFetchingModels] = useState(false);
   const [fetchedModels, setFetchedModels] = useState<string[]>([]);
   const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [testErrorMsg, setTestErrorMsg] = useState<string | null>(null);
+
+  // Test SearXNG Endpoint Connectivity
+  const handleTestSearxng = async () => {
+    if (!searxngUrl.trim()) {
+      setSearxngTestStatus('error');
+      setSearxngTestMsg('SearXNGのURLを入力してください。');
+      return;
+    }
+
+    setIsTestingSearxng(true);
+    setSearxngTestStatus('idle');
+    setSearxngTestMsg(null);
+
+    const baseUrl = searxngUrl.trim().replace(/\/$/, '');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    try {
+      const response = await fetch(`${baseUrl}/search?q=ping&format=json`, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        if (response.status === 403) {
+          throw new Error('SearXNG サーバーに接続できましたが、JSON APIフォーマットが無効化されています。');
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await response.text();
+        try {
+          JSON.parse(text);
+        } catch {
+          throw new Error('レスポンスがJSON形式ではありません。SearXNGのJSON API有効化を確認してください。');
+        }
+      } else {
+        const data = await response.json();
+        if (data && (Array.isArray(data.results) || data.query)) {
+          setSearxngTestStatus('success');
+          const hits = Array.isArray(data.results) ? data.results.length : 0;
+          setSearxngTestMsg(`SearXNG 疎通成功！ (API正常応答, 取得サンプル数: ${hits}件)`);
+          return;
+        }
+      }
+
+      setSearxngTestStatus('success');
+      setSearxngTestMsg('SearXNG サーバーへの正常な接続を確認しました。');
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      console.error('SearXNG test failed:', err);
+      setSearxngTestStatus('error');
+      if (err.name === 'AbortError') {
+        setSearxngTestMsg('接続タイムアウト: SearXNG サーバーからの応答がありませんでした (6秒超過)。');
+      } else {
+        setSearxngTestMsg(err.message || 'SearXNG サーバーへの接続に失敗しました。(CORS制限またはネットワークエラー)');
+      }
+    } finally {
+      setIsTestingSearxng(false);
+    }
+  };
 
   // Fetch Available Models from API Endpoint
   const handleFetchModels = async () => {
@@ -112,20 +184,77 @@ export const SettingsModal: React.FC = () => {
 
       <form onSubmit={handleSave} className="space-y-6 max-w-2xl">
         {/* SearXNG Section */}
-        <div className="bg-[#171a29] p-5 rounded-2xl border border-slate-700/80 space-y-3">
-          <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
-            <Server className="w-4 h-4" /> Web検索エンジン設定 (SearXNG API)
-          </h3>
+        <div className="bg-[#171a29] p-5 rounded-2xl border border-slate-700/80 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+              <Server className="w-4 h-4" /> Web検索エンジン設定 (SearXNG API)
+            </h3>
+            <button
+              type="button"
+              onClick={handleTestSearxng}
+              disabled={isTestingSearxng || !searxngUrl}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold transition-all disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isTestingSearxng ? 'animate-spin' : ''}`} />
+              <span>{isTestingSearxng ? '疎通確認中...' : '接続テスト'}</span>
+            </button>
+          </div>
           <p className="text-xs text-slate-400">
             プライバシー保護型メタ検索エンジン SearXNG の URL エンドポイントを指定します。(例: https://searx.be やローカル Docker)
           </p>
-          <input
-            type="url"
-            value={searxngUrl}
-            onChange={(e) => setSearxngUrl(e.target.value)}
-            placeholder="https://searx.be"
-            className="w-full bg-[#0f111a] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-amber-400 font-mono"
-          />
+
+          <div className="space-y-2">
+            <input
+              type="url"
+              value={searxngUrl}
+              onChange={(e) => {
+                setSearxngUrl(e.target.value);
+                setSearxngTestStatus('idle');
+              }}
+              placeholder="https://searx.be"
+              className="w-full bg-[#0f111a] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-amber-400 font-mono"
+            />
+
+            {/* Quick Preset Badges */}
+            <div className="flex items-center gap-2 text-[11px] text-slate-400">
+              <span className="text-slate-500">プリセット例:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearxngUrl('https://searx.be');
+                  setSearxngTestStatus('idle');
+                }}
+                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono transition-colors"
+              >
+                https://searx.be
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearxngUrl('http://localhost:8080');
+                  setSearxngTestStatus('idle');
+                }}
+                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono transition-colors"
+              >
+                http://localhost:8080
+              </button>
+            </div>
+          </div>
+
+          {/* Connection Status Feedback */}
+          {searxngTestStatus === 'success' && (
+            <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/30">
+              <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+              <span>{searxngTestMsg}</span>
+            </div>
+          )}
+
+          {searxngTestStatus === 'error' && (
+            <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 p-2.5 rounded-lg border border-red-500/30">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>{searxngTestMsg}</span>
+            </div>
+          )}
         </div>
 
         {/* AI Provider Section */}
