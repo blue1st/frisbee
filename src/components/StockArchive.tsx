@@ -3,6 +3,7 @@ import { useFrisbeeStore } from '../services/store';
 import { StockItem, StockFormat } from '../types';
 import { AskDogModal } from './AskDogModal';
 import { FormattedContentView } from './FormattedContentView';
+import { FullDetailModal } from './FullDetailModal';
 import { openExternalUrl } from '../utils/openUrl';
 import { reformatItemToTable } from '../services/searchAgent';
 import { Database, Search, ExternalLink, Trash2, Calendar, FileText, MessageSquare, Table, List, Layers, Sparkles, Loader2, Wand2 } from 'lucide-react';
@@ -18,6 +19,7 @@ export const StockArchive: React.FC = () => {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [reformattingIds, setReformattingIds] = useState<{ [id: string]: boolean }>({});
   const [activeAskItem, setActiveAskItem] = useState<StockItem | null>(null);
+  const [expandItem, setExpandItem] = useState<StockItem | null>(null);
 
   const handleReformatTable = async (item: StockItem) => {
     setReformattingIds((prev) => ({ ...prev, [item.id]: true }));
@@ -216,7 +218,11 @@ export const StockArchive: React.FC = () => {
                 </div>
 
                 {/* Formatted Content View */}
-                <FormattedContentView item={item} format={currentFormat} />
+                <FormattedContentView
+                  item={item}
+                  format={currentFormat}
+                  onExpand={() => setExpandItem(item)}
+                />
 
                 {/* User Notes */}
                 {item.userNotes && (
@@ -267,6 +273,16 @@ export const StockArchive: React.FC = () => {
         <AskDogModal
           item={activeAskItem}
           onClose={() => setActiveAskItem(null)}
+        />
+      )}
+
+      {/* Full Detail Expand Modal */}
+      {expandItem && (
+        <FullDetailModal
+          item={expandItem}
+          initialFormat={expandItem.format}
+          onClose={() => setExpandItem(null)}
+          onAskDog={(it) => setActiveAskItem(it as StockItem)}
         />
       )}
     </div>

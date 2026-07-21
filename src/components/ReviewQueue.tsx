@@ -3,6 +3,7 @@ import { useFrisbeeStore } from '../services/store';
 import { ReviewItem, StockFormat } from '../types';
 import { AskDogModal } from './AskDogModal';
 import { FormattedContentView } from './FormattedContentView';
+import { FullDetailModal } from './FullDetailModal';
 import { openExternalUrl } from '../utils/openUrl';
 import { reformatItemToTable } from '../services/searchAgent';
 import { Check, RefreshCw, X, ExternalLink, Tag, Sparkles, Inbox, MessageSquare, Table, List, FileText, Layers, Loader2, Wand2 } from 'lucide-react';
@@ -22,6 +23,7 @@ export const ReviewQueue: React.FC = () => {
   const [selectedFormats, setSelectedFormats] = useState<{ [id: string]: StockFormat }>({});
   const [reformattingIds, setReformattingIds] = useState<{ [id: string]: boolean }>({});
   const [activeAskItem, setActiveAskItem] = useState<ReviewItem | null>(null);
+  const [expandItem, setExpandItem] = useState<ReviewItem | null>(null);
 
   const handleReformatTable = async (item: ReviewItem) => {
     setReformattingIds((prev) => ({ ...prev, [item.id]: true }));
@@ -201,6 +203,7 @@ export const ReviewQueue: React.FC = () => {
               <FormattedContentView
                 item={item}
                 format={selectedFormats[item.id] || item.format || 'full'}
+                onExpand={() => setExpandItem(item)}
               />
 
               {/* Source URLs */}
@@ -308,6 +311,16 @@ export const ReviewQueue: React.FC = () => {
         <AskDogModal
           item={activeAskItem}
           onClose={() => setActiveAskItem(null)}
+        />
+      )}
+
+      {/* Full Detail Expand Modal */}
+      {expandItem && (
+        <FullDetailModal
+          item={expandItem}
+          initialFormat={selectedFormats[expandItem.id] || expandItem.format}
+          onClose={() => setExpandItem(null)}
+          onAskDog={(it) => setActiveAskItem(it as ReviewItem)}
         />
       )}
     </div>
