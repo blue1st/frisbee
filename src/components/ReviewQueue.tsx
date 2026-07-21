@@ -4,20 +4,37 @@ import { ReviewItem, StockFormat } from '../types';
 import { AskDogModal } from './AskDogModal';
 import { FormattedContentView } from './FormattedContentView';
 import { openExternalUrl } from '../utils/openUrl';
-import { Check, RefreshCw, X, ExternalLink, Tag, Sparkles, Inbox, MessageSquare, Table, List, FileText, Layers } from 'lucide-react';
+import { reformatItemToTable } from '../services/searchAgent';
+import { Check, RefreshCw, X, ExternalLink, Tag, Sparkles, Inbox, MessageSquare, Table, List, FileText, Layers, Loader2, Wand2 } from 'lucide-react';
 
 export const ReviewQueue: React.FC = () => {
   const reviewItems = useFrisbeeStore((state) => state.reviewItems);
   const acceptReviewItem = useFrisbeeStore((state) => state.acceptReviewItem);
   const retryTask = useFrisbeeStore((state) => state.retryTask);
   const updateReviewStatus = useFrisbeeStore((state) => state.updateReviewStatus);
+  const updateReviewItemTable = useFrisbeeStore((state) => state.updateReviewItemTable);
   const setActiveTab = useFrisbeeStore((state) => state.setActiveTab);
+  const settings = useFrisbeeStore((state) => state.settings);
 
   const pendingItems = reviewItems.filter((item) => item.status === 'pending');
   const [userNote, setUserNote] = useState<{ [id: string]: string }>({});
   const [customTagInput, setCustomTagInput] = useState<{ [id: string]: string }>({});
   const [selectedFormats, setSelectedFormats] = useState<{ [id: string]: StockFormat }>({});
+  const [reformattingIds, setReformattingIds] = useState<{ [id: string]: boolean }>({});
   const [activeAskItem, setActiveAskItem] = useState<ReviewItem | null>(null);
+
+  const handleReformatTable = async (item: ReviewItem) => {
+    setReformattingIds((prev) => ({ ...prev, [item.id]: true }));
+    try {
+      const newTable = await reformatItemToTable(item, settings);
+      updateReviewItemTable(item.id, newTable);
+      setSelectedFormats((prev) => ({ ...prev, [item.id]: 'table' }));
+    } catch (e) {
+      console.error('Failed to reformat table:', e);
+    } finally {
+      setReformattingIds((prev) => ({ ...prev, [item.id]: false }));
+    }
+  };
 
   const handleAccept = (item: ReviewItem, suggestedTags: string[]) => {
     const note = userNote[item.id] || '';
@@ -135,11 +152,27 @@ export const ReviewQueue: React.FC = () => {
               </div>
 
               {/* Format Selection Bar */}
-              <div className="flex items-center justify-between bg-[#111320] px-3 py-2 rounded-xl border border-slate-800">
-                <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  保存・閲覧形式の選択:
-                </span>
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-[#111320] px-3 py-2 rounded-xl border border-slate-800">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    保存・閲覧形式の選択:
+                  </span>
+                  <button
+                    onClick={() => handleReformatTable(item)}
+                    disabled={reformattingIds[item.id]}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-[11px] font-bold transition-all shadow-sm disabled:opacity-50"
+                    title="画質・価格・発売時期などの具体項目ごとの比較表にAIで再ビルドします"
+                  >
+                    {reformattingIds[item.id] ? (
+                      <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />
+                    ) : (
+                      <Wand2 className="w-3 h-3 text-indigo-400" />
+                    )}
+                    <span>AIでスペック項目表に再成形</span>
+                  </button>
+                </div>
+
                 <div className="flex items-center gap-1 bg-[#181c2e] p-1 rounded-lg border border-slate-800">
                   {FORMAT_OPTIONS.map((opt) => {
                     const currentFormat = selectedFormats[item.id] || item.format || 'full';

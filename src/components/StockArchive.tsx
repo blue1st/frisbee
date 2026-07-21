@@ -4,15 +4,33 @@ import { StockItem, StockFormat } from '../types';
 import { AskDogModal } from './AskDogModal';
 import { FormattedContentView } from './FormattedContentView';
 import { openExternalUrl } from '../utils/openUrl';
-import { Database, Search, ExternalLink, Trash2, Calendar, FileText, MessageSquare, Table, List, Layers, Sparkles } from 'lucide-react';
+import { reformatItemToTable } from '../services/searchAgent';
+import { Database, Search, ExternalLink, Trash2, Calendar, FileText, MessageSquare, Table, List, Layers, Sparkles, Loader2, Wand2 } from 'lucide-react';
 
 export const StockArchive: React.FC = () => {
   const stockItems = useFrisbeeStore((state) => state.stockItems);
   const removeStockItem = useFrisbeeStore((state) => state.removeStockItem);
   const updateStockFormat = useFrisbeeStore((state) => state.updateStockFormat);
+  const updateStockItemTable = useFrisbeeStore((state) => state.updateStockItemTable);
+  const settings = useFrisbeeStore((state) => state.settings);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [reformattingIds, setReformattingIds] = useState<{ [id: string]: boolean }>({});
   const [activeAskItem, setActiveAskItem] = useState<StockItem | null>(null);
+
+  const handleReformatTable = async (item: StockItem) => {
+    setReformattingIds((prev) => ({ ...prev, [item.id]: true }));
+    try {
+      const newTable = await reformatItemToTable(item, settings);
+      updateStockItemTable(item.id, newTable);
+      updateStockFormat(item.id, 'table');
+    } catch (e) {
+      console.error('Failed to reformat stock item table:', e);
+    } finally {
+      setReformattingIds((prev) => ({ ...prev, [item.id]: false }));
+    }
+  };
 
   // Extract all unique tags
   const allTags = Array.from(
@@ -155,11 +173,27 @@ export const StockArchive: React.FC = () => {
                 </div>
 
                 {/* View Format Switcher */}
-                <div className="flex items-center justify-between bg-[#111320] px-3 py-1.5 rounded-xl border border-slate-800/80">
-                  <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-amber-400" />
-                    閲覧形式:
-                  </span>
+                <div className="flex flex-wrap items-center justify-between gap-2 bg-[#111320] px-3 py-1.5 rounded-xl border border-slate-800/80">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-amber-400" />
+                      閲覧形式:
+                    </span>
+                    <button
+                      onClick={() => handleReformatTable(item)}
+                      disabled={reformattingIds[item.id]}
+                      className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-[11px] font-bold transition-all shadow-sm disabled:opacity-50"
+                      title="画質・価格・発売時期などの具体項目ごとの比較表にAIで再ビルドします"
+                    >
+                      {reformattingIds[item.id] ? (
+                        <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />
+                      ) : (
+                        <Wand2 className="w-3 h-3 text-indigo-400" />
+                      )}
+                      <span>AIでスペック項目表に再成形</span>
+                    </button>
+                  </div>
+
                   <div className="flex items-center gap-1 bg-[#181c2e] p-1 rounded-lg border border-slate-800">
                     {FORMAT_OPTIONS.map((opt) => {
                       const isActive = currentFormat === opt.id;

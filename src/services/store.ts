@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { FrisbeeTask, ReviewItem, StockItem, AppSettings } from '../types';
+import { FrisbeeTask, ReviewItem, StockItem, AppSettings, TableData } from '../types';
 
 interface FrisbeeState {
   // Queue
@@ -25,6 +25,8 @@ interface FrisbeeState {
   
   acceptReviewItem: (id: string, userNotes?: string, customTags?: string[], selectedFormat?: FrisbeeState['stockItems'][0]['format']) => void;
   updateStockFormat: (id: string, format: FrisbeeState['stockItems'][0]['format']) => void;
+  updateReviewItemTable: (id: string, tableData: TableData) => void;
+  updateStockItemTable: (id: string, tableData: TableData) => void;
   retryTask: (reviewItemId: string) => void;
 
   removeStockItem: (id: string) => void;
@@ -210,6 +212,22 @@ export const useFrisbeeStore = create<FrisbeeState>()(
         set((state) => ({
           stockItems: state.stockItems.map((s) =>
             s.id === id ? { ...s, format } : s
+          ),
+        }));
+      },
+
+      updateReviewItemTable: (id, tableData) => {
+        set((state) => ({
+          reviewItems: state.reviewItems.map((r) =>
+            r.id === id ? { ...r, tableData } : r
+          ),
+        }));
+      },
+
+      updateStockItemTable: (id, tableData) => {
+        set((state) => ({
+          stockItems: state.stockItems.map((s) =>
+            s.id === id ? { ...s, tableData } : s
           ),
         }));
       },
