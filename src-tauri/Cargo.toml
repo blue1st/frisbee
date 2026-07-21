@@ -1,6 +1,6 @@
 [package]
 name = "frisbee"
-version = "0.1.8"
+version = "0.1.9"
 description = "Async Web Search & Knowledge Aggregation Tool with Dog Frisbee Motif"
 authors = ["you"]
 edition = "2021"

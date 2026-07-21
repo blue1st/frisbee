@@ -1256,7 +1256,7 @@ dependencies = [
 
 [[package]]
 name = "frisbee"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "image",
  "reqwest 0.12.28",
