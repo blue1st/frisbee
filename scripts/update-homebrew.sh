@@ -48,10 +48,8 @@ cask "${CASK_NAME}" do
 
   app "Frisbee.app"
 
-  postflight do
-    system_command "xattr",
-                   args: ["-cr", "#{appdir}/Frisbee.app"],
-                   sudo: false
+  postflight_steps do
+    run "/usr/bin/xattr", args: ["-cr", "#{appdir}/Frisbee.app"]
   end
 
   zap trash: [
